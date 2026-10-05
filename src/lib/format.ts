@@ -23,3 +23,8 @@ export const CATEGORY_LABEL: Record<string, string> = {
   bottoms: "Bottoms",
   accessories: "Accessories",
 };
+
+export function maskEmail(email: string) {
+  const [local, domain] = email.split("@");
+  return `${local.slice(0, 2)}${"•".repeat(Math.max(1, Math.min(6, local.length - 2)))}@${domain}`;
+}

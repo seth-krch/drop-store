@@ -9,6 +9,11 @@ const db = drizzle(sql, { schema });
 const { drops, products, posts } = buildCatalog(new Date());
 
 await db.transaction(async (tx) => {
+  // Orders, bags and queues reference the catalog, so they go first.
+  await tx.delete(schema.orderItems);
+  await tx.delete(schema.orders);
+  await tx.delete(schema.cartItems);
+  await tx.delete(schema.queueEntries);
   await tx.delete(schema.variants);
   await tx.delete(schema.products);
   await tx.delete(schema.drops);

@@ -3,6 +3,8 @@ import { Logo } from "./Logo";
 import { SearchBox } from "./SearchBox";
 import { nextDrop } from "@/lib/store";
 import { dropTime } from "@/lib/format";
+import { currentUser } from "@/lib/auth";
+import { bagCount } from "@/lib/bag";
 
 const NAV = [
   { href: "/shop?sort=newest", label: "New" },
@@ -15,7 +17,8 @@ const NAV = [
 ];
 
 export async function Header() {
-  const drop = await nextDrop();
+  const [drop, user] = await Promise.all([nextDrop(), currentUser()]);
+  const count = user ? await bagCount(user.id) : 0;
   return (
     <>
       <div className="announce">
@@ -35,12 +38,12 @@ export async function Header() {
           </nav>
           <div className="tools">
             <SearchBox />
-            <Link href="/account/login" aria-label="Account">
+            <Link href={user ? "/account" : "/account/login"} aria-label={user ? `Account, ${user.name}` : "Sign in"}>
               <svg viewBox="0 0 24 24" aria-hidden="true"><g fill="none" stroke="currentColor" strokeWidth="1.8"><circle cx="12" cy="8" r="4" /><path d="M4 21c1.5-4 4.5-6 8-6s6.5 2 8 6" /></g></svg>
             </Link>
-            <Link href="/bag" aria-label="Bag, 0 items">
+            <Link href="/bag" aria-label={`Bag, ${count} item${count === 1 ? "" : "s"}`}>
               <svg viewBox="0 0 24 24" aria-hidden="true"><g fill="none" stroke="currentColor" strokeWidth="1.8"><path d="M5 8h14l-1 13H6z" /><path d="M9 8a3 3 0 0 1 6 0" /></g></svg>
-              <span>0</span>
+              <span>{count}</span>
             </Link>
             <Link href="/shop" className="menu-btn">Menu</Link>
           </div>

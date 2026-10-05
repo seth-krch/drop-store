@@ -4,6 +4,7 @@ import { notFound } from "next/navigation";
 import { getDrop } from "@/lib/store";
 import { dropTime, money } from "@/lib/format";
 import { Countdown } from "@/components/Countdown";
+import { phase } from "@/lib/queue-math";
 
 export async function generateMetadata({ params }: PageProps<"/drops/[slug]">): Promise<Metadata> {
   const { slug } = await params;
@@ -17,6 +18,7 @@ export default async function DropPage({ params }: PageProps<"/drops/[slug]">) {
   const d = await getDrop(slug);
   if (!d) notFound();
   const state = d.startsAt > now ? "upcoming" : d.endsAt > now ? "live" : "ended";
+  const roomOpen = phase(d, now) === "room";
 
   return (
     <div className="wrap">
@@ -31,7 +33,7 @@ export default async function DropPage({ params }: PageProps<"/drops/[slug]">) {
           {state === "ended" && <span className="pill pill--done">This drop has ended</span>}
           {state !== "ended" && (
             <div style={{ display: "grid", gap: 8, maxWidth: 360 }}>
-              <Link className="btn" href={`/account/login?next=/drops/${d.slug}`}>{state === "live" ? "Enter the line" : "Sign in to get ready"}</Link>
+              <Link className="btn" href={`/drops/${d.slug}/queue`}>{state === "live" ? "Join the line" : roomOpen ? "Enter the waiting room" : "Get ready"}</Link>
               <p className="note">The waiting room opens 15 minutes before the drop. You need a Mystic account to buy.</p>
             </div>
           )}

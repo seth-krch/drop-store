@@ -63,7 +63,7 @@ export default async function ProductPage({ params }: PageProps<"/products/[slug
             <p className="muted" style={{ margin: "4px 0 10px" }}>{p.colorway}</p>
             <Price cents={p.priceCents} compareAt={p.compareAtCents} />
           </div>
-          <SizePicker slug={p.slug} sizes={p.variants.map((v) => ({ size: v.size, stock: v.stock }))} />
+          <SizePicker slug={p.slug} sizes={p.variants.map((v) => ({ id: v.id, size: v.size, stock: v.stock }))} />
           <div className="acc">
             <details open><summary>Description</summary><p>{p.description}</p></details>
             <details><summary>Details</summary><ul>{p.details.map((d) => <li key={d}>{d}</li>)}<li>Style: {p.sku}</li></ul></details>
