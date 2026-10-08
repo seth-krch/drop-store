@@ -16,6 +16,8 @@ export default function Privacy() {
         <p>Security data is kept for up to 30 days. Account data is kept until you delete your account.</p>
         <h2>Sharing</h2>
         <p>We don’t sell your data. We share it only with service providers that help us run the store, such as our email provider.</p>
+        <h2>Demo store</h2>
+        <p>Mystic is a demo store. It takes no real payments and ships no orders. Use a test email address and a password you don’t use anywhere else.</p>
         <h2>Contact</h2>
         <p>privacy@mystic.example</p>
       </div>

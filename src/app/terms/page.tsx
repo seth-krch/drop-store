@@ -13,7 +13,7 @@ export default function Terms() {
         <h2>Automated access</h2>
         <p>You may not use bots, scripts, scrapers or other automated tools to create accounts, place orders, or access the site in a way that puts an unreasonable load on it. We use automated systems to detect and block this activity.</p>
         <h2>Payments</h2>
-        <p>This store does not process real payments. Checkout is for demonstration only and no charges are made.</p>
+        <p>Mystic is a demo store. It does not process real payments, no charges are made, and no orders ship. Checkout is for demonstration only.</p>
         <h2>Changes</h2>
         <p>We may update these terms at any time. Continued use of the site means you accept the current terms.</p>
       </div>
