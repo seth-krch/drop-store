@@ -1,23 +1,34 @@
-"""Today's cheapest Mobil 1 Advanced Full Synthetic 5W-20 in 1 qt bottles (singles and packs),
-delivered to Kansas, ranked by price per quart.
+"""Cheapest Mobil 1 5W-20 in 1 qt bottles (singles and packs) across ~80 stores, per product line.
 
-    python oil_prices.py [--tax 8.75] [--out report.md]
+    python oil_prices.py [--tax 8.75] [--part 103008] [--only walmart.com] [--top 5]
+
+Links live in links.csv (part, line, store, quarts, min_qty, url). Offers are ranked by item
+price per quart; a delivered-to-Kansas price is shown where the store's shipping rule is known.
+Also saves report.html (the same tables) and appends every result to history.csv.
 
 Uses Camoufox if installed, otherwise Patchright. Patchright runs a visible
 browser (fewer bot checks), so on a server without a screen use `xvfb-run`.
 """
 import argparse
+import csv
+import datetime
+import functools
+import itertools
 import json
 import random
 import re
 import sys
 import tempfile
 from contextlib import ExitStack
+from pathlib import Path
+from urllib.parse import urlparse
+
+HERE = Path(__file__).parent
 
 # Kansas taxes shipping too. State 6.5% + local; pass your ZIP's rate with --tax.
 TAX = 8.75
 
-# (free shipping at, otherwise) for non-members. Store pickup is free.
+# (free shipping at, otherwise) for non-members. Unknown for every other store.
 SHIPPING = {
     "Walmart": (35, 6.99),
     "Amazon": (35, 6.99),
@@ -33,11 +44,13 @@ def money(text):
     return float(f"{m[1]}.{m[2]}")
 
 
+# Each reader returns (name, price, in_stock) with in_stock None when the page doesn't say.
+
 def walmart(page, url):
     page.goto(url)
     name = page.locator("h1#main-title").inner_text()
     price = page.locator('[itemprop="price"]').first.inner_text()
-    return name, money(price)
+    return name, money(price), None
 
 
 def amazon(page, url):
@@ -46,47 +59,130 @@ def amazon(page, url):
     price = page.locator("#corePrice_feature_div .a-offscreen, #corePriceDisplay_desktop_feature_div .a-offscreen")
     if not price.count():
         raise ValueError("no Amazon price (unavailable, or only other sellers)")
-    return name, money(price.first.text_content())
+    return name, money(price.first.text_content()), None
 
 
 def home_depot(page, url):
     page.goto(url)
     name = page.locator("h1").first.inner_text()
     price = page.locator('[data-component^="price:Price"]:not(.sui-invisible)').first.inner_text()
-    return name, money(price)
+    return name, money(price), None
 
 
 def advance(page, url):
     page.goto(url)
     name = page.locator("h1").first.inner_text()
     price = page.locator('[data-testid="price-box"]').first.inner_text()
-    return name, money(price)
+    return name, money(price), None
 
 
-def json_ld(page, url):
-    """Name and price from the page's schema.org Product data."""
+def ebay(page, url):
     page.goto(url)
+    name = page.locator("h1.x-item-title__mainTitle").first.inner_text()
+    price = page.locator(".x-price-primary").first.inner_text()
+    if "US $" not in price and not price.lstrip().startswith("$"):
+        raise ValueError(f"not a US dollar price: {price!r}")
+    return name, money(price), None
+
+
+def db_supply(page, url):
+    page.goto(url)
+    data = json.loads(page.locator("script#__NEXT_DATA__").text_content())
+    p = data["props"]["pageProps"]["productPageData"]["stores"]["default"]["productData"]
+    return p["name"], p["price_range"]["minimum_price"]["final_price"]["value"], p["stock_status"] == "IN_STOCK"
+
+
+def generic(page, url, part=""):
+    """Most stores: schema.org Product data, Shopify's product JSON, or price meta tags."""
+    page.goto(url)
+    try:  # some stores add their product data a moment after the page loads
+        page.wait_for_selector('script[type="application/ld+json"]', state="attached", timeout=5000)
+    except Exception:
+        pass
+    for read in (from_json_ld, from_shopify, from_meta):
+        found = read(page, url, part)
+        if found:
+            return found
+    raise ValueError("no price found on page")
+
+
+def from_json_ld(page, url, part=""):
+    found = []
     for block in page.locator('script[type="application/ld+json"]').all_text_contents():
-        for item in (lambda d: d if isinstance(d, list) else [d])(json.loads(block)):
-            if item.get("@type") == "Product":
-                offer = item["offers"][0] if isinstance(item["offers"], list) else item["offers"]
-                return item["name"], float(offer["price"])
-    raise ValueError(f"no Product data on page titled {page.title()!r}")
+        for item in walk(parse(block)):
+            for offer in walk(item.get("offers")) if "Product" in str(item.get("@type")) else []:
+                if offer.get("price") or offer.get("lowPrice"):
+                    stock = str(offer.get("availability", "")) or None
+                    found.append((part not in json.dumps(item), item.get("name", ""),
+                                  to_price(offer.get("price") or offer["lowPrice"]), stock and "InStock" in stock))
+    # Stores that list every size as a variant: prefer the one that names this part number.
+    return min(found, key=lambda f: f[0])[1:] if found else None
 
 
-# (store, reader, product link, quarts in the listing). Only 1 qt bottles and packs of them.
-# Same-store links are spread out: back-to-back visits trip Walmart's and Amazon's bot checks.
-SITES = [
-    ("Walmart", walmart, "https://www.walmart.com/ip/Mobil-1-Advanced-Full-Synthetic-Motor-Oil-5W-20-1-Quart/16767828", 1),
-    ("Amazon", amazon, "https://www.amazon.com/dp/B000BARHOQ", 1),
-    ("Home Depot", home_depot, "https://www.homedepot.com/p/Mobil-1-qt-Classic-5W-20-Synthetic-Motor-Oil-103008/333250613", 1),
-    ("Walmart", walmart, "https://www.walmart.com/ip/5-pack-Mobil-1-Advanced-Full-Synthetic-Motor-Oil-5W-20-1-Quart/17930365643", 5),
-    ("Advance Auto", advance, "https://shop.advanceautoparts.com/p/mobil-1-advanced-full-synthetic-motor-oil-5w-20-1-quart-103008/8110007-P", 1),
-    ("Amazon", amazon, "https://www.amazon.com/dp/B000SM6OD2", 6),
-    ("AutoZone", json_ld, "https://www.autozone.com/p/mobil-1-motor-oil-103008/628507", 1),
-    ("Walmart", walmart, "https://www.walmart.com/ip/Mobil-1-Advanced-Full-Synthetic-Motor-Oil-5W-20-1-qt-6-Pack/164214023", 6),
-    ("O'Reilly", json_ld, "https://www.oreillyauto.com/detail/c/1-advanced/mobil-1-advanced-full-synthetic-motor-oil-5w-20-1-quart/mob8/1520", 1),
-]
+def from_shopify(page, url, part=""):
+    if "/products/" not in url:
+        return None
+    resp = page.request.get(url.split("?")[0].rstrip("/") + ".js")
+    if not resp.ok or "json" not in resp.headers.get("content-type", ""):
+        return None
+    data, wanted = resp.json(), re.search(r"variant=(\d+)", url)
+    v = next((v for v in data["variants"] if wanted and str(v["id"]) == wanted[1]), data["variants"][0])
+    return data["title"], v["price"] / 100, v["available"]
+
+
+def from_meta(page, url, part=""):
+    price = page.locator('meta[property$="price:amount"], [itemprop="price"]').first
+    if not price.count():
+        return None
+    value = price.get_attribute("content") or price.inner_text()
+    title = page.locator('meta[property="og:title"]').first
+    name = title.get_attribute("content") if title.count() else page.title()
+    return name, to_price(value), None
+
+
+def to_price(value):
+    return float(re.sub(r"[^\d.]", "", str(value)))
+
+
+def parse(text):
+    try:
+        return json.loads(text, strict=False)
+    except ValueError:
+        return None
+
+
+def walk(node):
+    """Every dict inside a JSON-LD document, however deeply nested (@graph, hasVariant, …)."""
+    if isinstance(node, list):
+        for n in node:
+            yield from walk(n)
+    elif isinstance(node, dict):
+        yield node
+        for value in node.values():
+            yield from walk(value)
+
+
+READERS = {"walmart.com": walmart, "amazon.com": amazon, "homedepot.com": home_depot,
+           "shop.advanceautoparts.com": advance, "ebay.com": ebay, "dbsupply.com": db_supply}
+
+
+def domain(url):
+    return urlparse(url).netloc.lower().removeprefix("www.")
+
+
+def load_links(part=None, only=None):
+    with open(HERE / "links.csv", newline="", encoding="utf-8") as f:
+        links = [dict(r, quarts=int(r["quarts"]), min_qty=int(r["min_qty"])) for r in csv.DictReader(f)]
+    return [l for l in links if (not part or l["part"] == part) and (not only or only in domain(l["url"]))]
+
+
+def spread(links):
+    """Round-robin by site so the same store is never hit twice in a row (bot checks)."""
+    by_site = {}
+    for link in links:
+        by_site.setdefault(domain(link["url"]), []).append(link)
+    rounds = itertools.zip_longest(*by_site.values())
+    return [link for batch in rounds for link in batch if link]
 
 
 def launch(stack):
@@ -100,86 +196,97 @@ def launch(stack):
         return pw.chromium.launch_persistent_context(tempfile.mkdtemp(), headless=False, no_viewport=True)
 
 
-def fetch_all(tries=3):
-    rows, failed = [], []
+def fetch(browser, link, tries=2):
+    read = READERS.get(domain(link["url"])) or functools.partial(generic, part=link["part"])
+    for attempt in range(tries):
+        page = browser.new_page()
+        page.set_default_timeout(15_000)
+        page.wait_for_timeout(random.randint(1000, 2500))
+        try:
+            name, price, stock = read(page, link["url"])
+            return dict(link, name=name.strip(), price=price, in_stock=stock, error="")
+        except Exception as e:
+            error = f"{str(e).splitlines()[0][:60]}; page: {page.title()[:40]!r}"
+        finally:
+            page.close()
+    return dict(link, name="", price=None, in_stock=None, error=error)
+
+
+def fetch_all(links):
+    from rich.progress import track
+
     with ExitStack() as stack:
         browser = launch(stack)
-        for store, fetch, url, qts in SITES:
-            for attempt in range(tries):
-                page = browser.new_page()
-                page.set_default_timeout(15_000)
-                page.wait_for_timeout(random.randint(1500, 4000))  # don't hammer stores back to back
-                try:
-                    rows.append((store, *fetch(page, url), url, qts))
-                    break
-                except Exception as e:
-                    if attempt == tries - 1:
-                        failed.append(f"{store} {qts} qt ({str(e).splitlines()[0][:60]}; page: {page.title()[:40]!r})")
-                finally:
-                    page.close()
-    return rows, failed
+        return [fetch(browser, link) for link in track(spread(links), description="Checking prices")]
 
 
-def landed(store, price, tax):
-    free_at, fee = SHIPPING[store]
-    ship = 0 if price >= free_at else fee
-    return ship, round((price + ship) * (1 + tax / 100), 2), round(price * (1 + tax / 100), 2)
+def delivered_per_qt(r, tax):
+    """Cheapest order the store allows, shipped to Kansas with tax, per quart. None if shipping unknown."""
+    if r["store"] not in SHIPPING:
+        return None
+    free_at, fee = SHIPPING[r["store"]]
+    order = r["price"] * r["min_qty"]
+    ship = 0 if order >= free_at else fee
+    return (order + ship) * (1 + tax / 100) / (r["quarts"] * r["min_qty"])
 
 
-def ranked(rows, tax):
-    """Dicts per listing, cheapest delivered price per quart first."""
-    out = []
-    for store, name, price, url, qts in rows:
-        ship, total, pickup = landed(store, price, tax)
-        out.append(dict(store=store, name=name.strip(), qts=qts, price=price, ship=ship, total=total,
-                        pickup=None if store == "Amazon" else pickup, per_qt=total / qts, url=url))
-    return sorted(out, key=lambda r: r["per_qt"])
+def ranked(results, tax):
+    """{line: offers cheapest per quart first}. Out-of-stock and duplicate listings are left out."""
+    by_line, seen = {}, set()
+    for r in sorted((r for r in results if r["price"] and r["in_stock"] is not False), key=lambda r: r["price"] / r["quarts"]):
+        key = (r["part"], r["store"], r["quarts"], r["price"])
+        if key not in seen:
+            seen.add(key)
+            by_line.setdefault((r["line"], r["part"]), []).append(dict(r, per_qt=r["price"] / r["quarts"], delivered=delivered_per_qt(r, tax)))
+    return by_line
 
 
-def show(rows, failed, tax):
+def show(console, by_line, results, tax, top):
     from rich import box
-    from rich.console import Console
     from rich.table import Table
 
-    console = Console()
-    table = Table(title=f"Mobil 1 5W-20 1 qt bottles, to Kansas ({tax}% tax incl. shipping)", box=box.SIMPLE_HEAD)
-    table.add_column("Store", no_wrap=True)
-    for col in ("Qts", "Price", "Ship", "Delivered", "Per qt", "Pickup"):
-        table.add_column(col, justify="right", no_wrap=True)
-    # The numbers take ~75 columns; the product name gets whatever is left and is cut with "…".
-    table.add_column("Product", no_wrap=True, overflow="ellipsis", max_width=max(5, console.width - 76))
-    for i, r in enumerate(rows):
-        pickup = "n/a" if r["pickup"] is None else f"${r['pickup']:.2f}"
-        table.add_row(f"[link={r['url']}]{r['store']}[/link]", str(r["qts"]), f"${r['price']:.2f}", f"${r['ship']:.2f}",
-                      f"${r['total']:.2f}", f"[bold]${r['per_qt']:.2f}[/bold]", pickup, r["name"],
-                      style="green" if i == 0 else None)
-    console.print(table)
+    for (line, part), offers in by_line.items():
+        table = Table(title=f"Mobil 1 {line} 5W-20 ({part})", box=box.SIMPLE_HEAD, title_justify="left")
+        table.add_column("Store", no_wrap=True)
+        for col in ("Qts", "Price", "Per qt", "Delivered/qt"):
+            table.add_column(col, justify="right", no_wrap=True)
+        table.add_column("Product", no_wrap=True, overflow="ellipsis", max_width=max(5, console.width - 62))
+        for i, r in enumerate(offers[:top]):
+            qts = f"{r['quarts']}×{r['min_qty']}" if r["min_qty"] > 1 else str(r["quarts"])
+            delivered = "?" if r["delivered"] is None else f"${r['delivered']:.2f}"
+            table.add_row(f"[link={r['url']}]{r['store']}[/link]", qts, f"${r['price']:.2f}",
+                          f"[bold]${r['per_qt']:.2f}[/bold]", delivered, r["name"], style="green" if i == 0 else None)
+        console.print(table)
+    failed = [r for r in results if r["error"]]
+    console.print(f"Read {len(results) - len(failed)} of {len(results)} links. Per qt is before shipping and tax; "
+                  f"Delivered/qt adds shipping to Kansas and {tax}% tax where the store's shipping is known (? = unknown).")
     if failed:
-        console.print("[red]Couldn't read:[/red] " + "; ".join(failed))
+        counts = sorted({r["store"] for r in failed}, key=lambda s: -sum(f["store"] == s for f in failed))
+        console.print("[red]Couldn't read:[/red] " + ", ".join(f"{s} ×{sum(f['store'] == s for f in failed)}" for s in counts))
 
 
-def markdown(rows, failed, tax):
-    lines = [f"Mobil 1 5W-20 1 qt bottles, to Kansas ({tax}% tax, incl. on shipping)", ""]
-    if rows:
-        b = rows[0]
-        lines += [f"**Cheapest: {b['store']} {b['qts']} qt, ${b['per_qt']:.2f}/qt (${b['total']:.2f} delivered)**: {b['url']}", ""]
-    lines += ["| Store | Qts | Price | Ship | Delivered | Per qt | Pickup | Product |", "|---|---|---|---|---|---|---|---|"]
-    for r in rows:
-        pickup = "n/a" if r["pickup"] is None else f"${r['pickup']:.2f}"
-        lines.append(f"| {r['store']} | {r['qts']} | ${r['price']:.2f} | ${r['ship']:.2f} | ${r['total']:.2f} | "
-                     f"**${r['per_qt']:.2f}** | {pickup} | [{r['name']}]({r['url']}) |")
-    if failed:
-        lines += ["", "Couldn't read: " + "; ".join(failed)]
-    return "\n".join(lines)
+def save_history(results):
+    path = HERE / "history.csv"
+    fields = ["date", "part", "line", "store", "quarts", "min_qty", "price", "in_stock", "url", "name", "error"]
+    new = not path.exists()
+    with open(path, "a", newline="", encoding="utf-8") as f:
+        w = csv.DictWriter(f, fieldnames=fields, extrasaction="ignore")
+        if new:
+            w.writeheader()
+        w.writerows(dict(r, date=datetime.date.today().isoformat()) for r in results)
 
 
 if __name__ == "__main__":
+    from rich.console import Console
+
     ap = argparse.ArgumentParser()
     ap.add_argument("--tax", type=float, default=TAX, help="Kansas combined sales tax %% for your ZIP")
-    ap.add_argument("--out", help="also write a markdown report to this file")
+    ap.add_argument("--part", help="only this part number, e.g. 103008")
+    ap.add_argument("--only", help="only links whose site contains this, e.g. walmart.com")
+    ap.add_argument("--top", type=int, default=5, help="offers to show per product line")
     args = ap.parse_args()
-    found, failed = fetch_all()
-    rows = ranked(found, args.tax)
-    show(rows, failed, args.tax)
-    if args.out:
-        open(args.out, "w", encoding="utf-8").write(markdown(rows, failed, args.tax) + "\n")
+    results = fetch_all(load_links(args.part, args.only))
+    console = Console(record=True)
+    show(console, ranked(results, args.tax), results, args.tax, args.top)
+    console.save_html(str(HERE / "report.html"))
+    save_history(results)
