@@ -8,6 +8,7 @@ browser (fewer bot checks), so on a server without a screen use `xvfb-run`.
 import argparse
 import json
 import re
+import sys
 import tempfile
 from contextlib import ExitStack
 
@@ -82,7 +83,8 @@ SITES = [
 def launch(stack):
     try:
         from camoufox.sync_api import Camoufox
-        return stack.enter_context(Camoufox(headless="virtual"))
+        # "virtual" (hidden Xvfb display) only exists on Linux; elsewhere show a window.
+        return stack.enter_context(Camoufox(headless="virtual" if sys.platform == "linux" else False))
     except ImportError:
         from patchright.sync_api import sync_playwright
         pw = stack.enter_context(sync_playwright())
