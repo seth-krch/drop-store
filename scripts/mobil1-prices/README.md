@@ -1,6 +1,6 @@
 # Mobil 1 5W-20 daily prices (Kansas)
 
-`oil_prices.py` opens each store's product page for Mobil 1 Advanced Full Synthetic 5W-20 (5 qt),
+`oil_prices.py` opens each store's product page for Mobil 1 Advanced Full Synthetic 5W-20 (1 qt bottle),
 reads the name and price, and lists them by delivered cost to Kansas: price + shipping +
 Kansas sales tax. Kansas taxes shipping too.
 

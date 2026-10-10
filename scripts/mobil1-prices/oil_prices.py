@@ -1,4 +1,4 @@
-"""Today's cheapest Mobil 1 Advanced Full Synthetic 5W-20 (5 qt), delivered to Kansas.
+"""Today's cheapest Mobil 1 Advanced Full Synthetic 5W-20 (1 qt bottle), delivered to Kansas.
 
     python oil_prices.py [--tax 8.75] [--out report.md]
 
@@ -71,12 +71,12 @@ def json_ld(page, url):
 
 
 SITES = [
-    ("Walmart", walmart, "https://www.walmart.com/ip/Mobil-1-Advanced-Full-Synthetic-Motor-Oil-5W-20-5-Quart/17018132"),
-    ("Amazon", amazon, "https://www.amazon.com/dp/B00J00X7QK"),
-    ("Home Depot", home_depot, "https://www.homedepot.com/p/Mobil-5-qt-Classic-5W-20-Advanced-Full-Synthetic-Motor-Oil-120763/315125330"),
-    ("Advance Auto Parts", advance, "https://shop.advanceautoparts.com/p/mobil-1-advanced-5w-20-full-synthetic-motor-oil-extends-engine-life-5-quart-14991/10069913-P"),
-    ("AutoZone", json_ld, "https://www.autozone.com/p/mobil-1-motor-oil-120763/835346"),
-    ("O'Reilly", json_ld, "https://www.oreillyauto.com/detail/c/1-advanced/mobil-1-advanced-full-synthetic-motor-oil-5w-20-5-quart/mob8/15205qt"),
+    ("Walmart", walmart, "https://www.walmart.com/ip/Mobil-1-Advanced-Full-Synthetic-Motor-Oil-5W-20-1-Quart/16767828"),
+    ("Amazon", amazon, "https://www.amazon.com/dp/B000BARHOQ"),
+    ("Home Depot", home_depot, "https://www.homedepot.com/p/Mobil-1-qt-Classic-5W-20-Synthetic-Motor-Oil-103008/333250613"),
+    ("Advance Auto Parts", advance, "https://shop.advanceautoparts.com/p/mobil-1-advanced-full-synthetic-motor-oil-5w-20-1-quart-103008/8110007-P"),
+    ("AutoZone", json_ld, "https://www.autozone.com/p/mobil-1-motor-oil-103008/628507"),
+    ("O'Reilly", json_ld, "https://www.oreillyauto.com/detail/c/1-advanced/mobil-1-advanced-full-synthetic-motor-oil-5w-20-1-quart/mob8/1520"),
 ]
 
 
@@ -117,7 +117,7 @@ def landed(store, price, tax):
 
 def report(rows, failed, tax):
     rows = sorted(((landed(s, p, tax), s, n, p, u) for s, n, p, u in rows), key=lambda r: r[0][1])
-    lines = [f"Mobil 1 5W-20, 5 qt, to Kansas ({tax}% tax, incl. on shipping)", ""]
+    lines = [f"Mobil 1 5W-20, 1 qt, to Kansas ({tax}% tax, incl. on shipping)", ""]
     if rows:
         (ship, total, _), store, name, _, url = rows[0]
         lines += [f"**Cheapest: {store}, ${total:.2f} delivered**: {url}", ""]
