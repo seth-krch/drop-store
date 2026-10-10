@@ -12,8 +12,7 @@
     "db:seed": "tsx --env-file=.env.local src/db/seed.mts",
     "test": "vitest run",
     "typecheck": "tsc --noEmit",
-    "drop:schedule": "tsx --env-file=.env.local src/db/schedule.mts",
-    "oil:prices": "tsx scripts/mobil1-prices/cli.mts"
+    "drop:schedule": "tsx --env-file=.env.local src/db/schedule.mts"
   },
   "dependencies": {
     "drizzle-orm": "^0.45.3",
@@ -31,7 +30,6 @@
     "drizzle-kit": "^0.31.11",
     "eslint": "^9",
     "eslint-config-next": "16.3.8",
-    "playwright": "^1.56.1",
     "tsx": "^4.23.15",
     "typescript": "^5",
     "vitest": "^5.0.3"

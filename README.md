@@ -22,7 +22,7 @@ npm run dev                     # http://localhost:3000
 | `npm run db:migrate` | Apply migrations in `drizzle/` |
 | `npm run db:seed` | Reset the catalog to the seed data in `src/db/catalog.ts` (also clears orders, bags and queues) |
 | `npm run drop:schedule -- <drop> <minutes> [--reset]` | Move a drop's start time for testing; `--reset` clears its queue and restocks it |
-| `npm run oil:prices` | Today's cheapest Mobil 1 5W-20 delivered to Kansas (see `scripts/mobil1-prices/`) |
+| `python scripts/mobil1-prices/oil_prices.py` | Today's cheapest Mobil 1 5W-20 delivered to Kansas (see `scripts/mobil1-prices/`) |
 | `npm test` | Unit tests (Vitest) |
 | `npm run lint` / `typecheck` | ESLint / TypeScript |
 

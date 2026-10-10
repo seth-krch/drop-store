@@ -1,0 +1,3 @@
+camoufox>=0.4
+# Fallback if Camoufox is not installed:
+# patchright
