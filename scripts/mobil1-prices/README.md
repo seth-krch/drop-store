@@ -1,6 +1,6 @@
 # Mobil 1 5W-20 daily prices
 
-`oil_prices.py` checks **193 product links across 75 stores** for Mobil 1 5W-20 in 1 qt bottles,
+`oil_prices.py` checks **192 product links across 75 stores** for Mobil 1 5W-20 in 1 qt bottles,
 covering single bottles and packs of them. It shows the cheapest offers for each product line:
 
 | Part | Line |
@@ -34,7 +34,7 @@ Each run:
 - saves the same tables to `report.html`, with clickable store names;
 - appends every result, including failures, to `history.csv`.
 
-A full run visits all 193 links one at a time with short pauses. It cycles through the stores so
+A full run visits all 192 links one at a time with short pauses. It cycles through the stores so
 it never hits the same one twice in a row, and takes roughly 20–30 minutes.
 
 ## Run it every morning (Windows)

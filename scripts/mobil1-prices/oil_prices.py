@@ -13,6 +13,7 @@ import argparse
 import csv
 import datetime
 import functools
+import html
 import itertools
 import json
 import random
@@ -208,7 +209,7 @@ def fetch(browser, link, tries=2):
         page.wait_for_timeout(random.randint(1000, 2500))
         try:
             name, price, stock = read(page, link["url"])
-            return dict(link, name=name.strip(), price=price, in_stock=stock, error="")
+            return dict(link, name=html.unescape(name).strip(), price=price, in_stock=stock, error="")
         except Exception as e:
             title = page.title()
             error = f"{str(e).splitlines()[0][:60]}; page: {title[:40]!r}"
@@ -254,10 +255,11 @@ def show(console, by_line, results, tax, top):
 
     for (line, part), offers in by_line.items():
         table = Table(title=f"Mobil 1 {line} 5W-20 ({part})", box=box.SIMPLE_HEAD, title_justify="left")
-        table.add_column("Store", no_wrap=True)
+        # Numbers keep their width; long store and product names are cut with "…" instead.
+        table.add_column("Store", no_wrap=True, overflow="ellipsis", max_width=18)
         for col in ("Qts", "Price", "Per qt", "Delivered/qt"):
             table.add_column(col, justify="right", no_wrap=True)
-        table.add_column("Product", no_wrap=True, overflow="ellipsis", max_width=max(5, console.width - 62))
+        table.add_column("Product", no_wrap=True, overflow="ellipsis", max_width=max(5, console.width - 68))
         for i, r in enumerate(offers[:top]):
             qts = f"{r['quarts']}×{r['min_qty']}" if r["min_qty"] > 1 else str(r["quarts"])
             delivered = "?" if r["delivered"] is None else f"${r['delivered']:.2f}"
