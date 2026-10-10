@@ -12,7 +12,8 @@
     "db:seed": "tsx --env-file=.env.local src/db/seed.mts",
     "test": "vitest run",
     "typecheck": "tsc --noEmit",
-    "drop:schedule": "tsx --env-file=.env.local src/db/schedule.mts"
+    "drop:schedule": "tsx --env-file=.env.local src/db/schedule.mts",
+    "oil:arbitrage": "tsx scripts/mobil1-arbitrage/cli.mts"
   },
   "dependencies": {
     "drizzle-orm": "^0.45.3",
