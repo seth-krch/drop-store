@@ -196,6 +196,10 @@ def launch(stack):
         return pw.chromium.launch_persistent_context(tempfile.mkdtemp(), headless=False, no_viewport=True)
 
 
+# Page titles of bot checks and block pages. Retrying these right away never helps.
+BLOCKED = re.compile(r"^$|just a moment|access denied|robot or human|pardon our interruption|captcha|forbidden|^[\w.]+\.com$", re.I)
+
+
 def fetch(browser, link, tries=2):
     read = READERS.get(domain(link["url"])) or functools.partial(generic, part=link["part"])
     for attempt in range(tries):
@@ -206,7 +210,10 @@ def fetch(browser, link, tries=2):
             name, price, stock = read(page, link["url"])
             return dict(link, name=name.strip(), price=price, in_stock=stock, error="")
         except Exception as e:
-            error = f"{str(e).splitlines()[0][:60]}; page: {page.title()[:40]!r}"
+            title = page.title()
+            error = f"{str(e).splitlines()[0][:60]}; page: {title[:40]!r}"
+            if BLOCKED.search(title):
+                break
         finally:
             page.close()
     return dict(link, name="", price=None, in_stock=None, error=error)
